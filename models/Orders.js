@@ -1,16 +1,15 @@
 const {Schema, model} = require('mongoose')
 
-const Alarms = new Schema({
+const Orders = new Schema({
     shortid: String,
     creator: String,
     title: String,
     category: String,
-    tel: String,
     color: String,
-    episodes: [{
+    calls: [{
         id: String,
-        volume: Number,
-        stage: String,
+        call: String,
+        sound_level: String,
         time_start: String
     }],
     cost: Number,
@@ -19,7 +18,10 @@ const Alarms = new Schema({
         lat: Number,
         long: Number
     },
-    isAccepted: Boolean
+    tel: String,
+    card: String,
+    isAccepted: Boolean,
+    dateUp: String
 })
 
-module.exports = model('Alarms', Alarms)
+module.exports = model('Orders', Orders)

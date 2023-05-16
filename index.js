@@ -9,7 +9,7 @@ const MistakeHandler = require('./libs/MistakeHandler')
 // collections import
 
 const Users = require('./models/Users')
-const Alarms = require('./models/Alarms')
+const Orders = require('./models/Orders')
 const Sleeps = require('./models/Sleeps')
 
 const PORT = process.env.PORT || 4000
@@ -88,18 +88,6 @@ const typeDefs = gql`
         variant: String!,
         text: String!
     }
-    type Episode {
-        id: String!,
-        volume: Float!,
-        stage: String!,
-        time_start: String!
-    }
-    input Episodes {
-        id: String!,
-        volume: Float!,
-        stage: String!,
-        time_start: String!
-    }
     type Impression {
         id: String!,
         impression: String!,
@@ -137,19 +125,33 @@ const typeDefs = gql`
         rating: [Rating]!,
         questions: [Question]!
     }
-    type Alarm {
+    type Call {
+        id: String!,
+        call: String!,
+        sound_level: String!,
+        time_start: String!
+    }
+    input Calls {
+        id: String!,
+        call: String!,
+        sound_level: String!,
+        time_start: String!
+    }
+    type Order {
         id: ID!,
         shortid: String!,
         creator: String!,
         title: String!,
         category: String!,
-        tel: String!,
         color: String!,
-        episodes: [Episode]!,
+        calls: [Call]!,
         cost: Float!,
         region: String!,
         cords: Cord!,
-        isAccepted: Boolean!
+        tel: String!,
+        card: String!,
+        isAccepted: Boolean!,
+        dateUp: String!
     }
     type User {
         id: ID!,
@@ -170,10 +172,11 @@ const typeDefs = gql`
         register(name: String!, email: String!, password: String!, age: Float!, sex: String!, location: Cords!) : UserInfo!
         login(name: String!, password: String!, collectionId: String!, key: String!) : UserInfo!
         getUserData(name: String!) : User!
-        createAlarm(name: String!, id: String!, title: String!, category: String!, tel: String!, color: String!, episodes: [Episodes]!, cost: Float!, region: String!, cords: Cords!) : String!
-        getAlarms(name: String!) : [Alarm]!
-        getAlarm(name: String!, shortid: String!) : Alarm!
-        updateAlarmEpisodes(name: String!, episodes: [Episodes]!, cost: Float!) : String!
+        createOrder(name: String!, id: String!, title: String!, category: String!, color: String!, calls: [Calls]!, cost: Float!, region: String!, cords: Cords!, tel: String!, card: String!) : String!
+        getOrders(name: String!) : [Order]!
+        getOrder(name: String!, shortid: String!) : Order!
+        updateOrderCalls(name: String!, id: String!, calls: [Calls]!, cost: Float!) : String!
+        updateOrderStatus(name: String!, id: String!, dateUp: String!) : String!
         createSleep(name: String!, id: String!, title: String!, level: String!, region: String!, cords: Cords!, impressions: [Impressions]!, dateUp: String!, time_start: String!, total: Float!) : String!
         getSleeps(name: String!) : [Sleep]!
         getSleep(name: String!, shortid: String!) : Sleep!
@@ -232,62 +235,78 @@ const resolvers = {
                 return user
             }
         },
-        createAlarm: async (_, {name, id, title, category, tel, color, episodes, cost, region, cords}) => {
+        createOrder: async (_, {name, id, title, category, color, calls, cost, region, cords, tel, card}) => {
             const user = await Users.findOne({name, collectionId: id})
-            const alarm = await Alarms.findOne({creator: name, title, category, tel, color, episodes, cost, region, cords})
+            const order = await Orders.findOne({creator: name, title, category, color, calls, cost, region, cords, tel, card})
 
-            if (user && !alarm) {
-                if (user.collection_boxes.filter(el => el.category === 'alarm').find(el => el.title === title) === undefined) {
+            if (user && !order) {
+                if (user.collection_boxes.filter(el => el.category === 'order').find(el => el.title === title) === undefined) {
 
                     const iden = await shortid.generate().toString()
 
                     user.collection_boxes = [...user.collection_boxes, {
                         id: iden,
                         title,
-                        category: 'alarm'
-                    }]                 
-                    
-                    const newAlarm = new Alarms({
+                        category: 'order'
+                    }]
+
+                    const newOrder = new Orders({
                         shortid: iden,
                         creator: user.name,
                         title,
                         category,
-                        tel,
                         color,
-                        episodes,
+                        calls,
                         cost,
                         region,
                         cords,
-                        isAccepted: false
-                    })
+                        tel,
+                        card,
+                        isAccepted: false,
+                        dateUp:''
+                    }) 
 
                     await Users.updateOne({name}, {$set: user})
-                    await newAlarm.save()
+                    await newOrder.save()
 
                     return 'Success'
                 }
             }
         },
-        getAlarms: async (_, {name}) => {
-            const alarm = await Alarms.find()
+        getOrders: async (_, {name}) => {
+            const order = await Orders.find()
 
-            return alarm
+            return order
         },
-        getAlarm: async (_, {name, shortid}) => {
-            const alarm = await Alarms.findOne({shortid})
+        getOrder: async (_, {name, shortid}) => {
+            const order = await Orders.findOne({shortid})
 
-            return alarm
+            return order
         },
-        updateAlarmEpisodes: async (_, {name, episodes, cost}) => {
+        updateOrderCalls: async (_, {name, id, calls, cost}) => {
             const user = await Users.findOne({name})
-            const alarm = await Alarms.findOne({shortid: id})
-            
-            if (user && alarm && user.name === alarm.creator) {
-                
-                alarm.episodes = episodes
-                alarm.cost = cost
-            
-                await Alarms.updateOne({shortid: id}, {$set: alarm})
+            const order = await Orders.findOne({shortid: id})
+
+            if (user && order && user.name === order.creator && !order.isAccepted) {
+
+                order.calls = calls
+                order.cost = cost
+
+                await Orders.updateOne({shortid: id}, {$set: order})
+
+                return 'Success'
+            }
+        },
+        updateOrderStatus: async (_, {name, id, dateUp}) => {
+            const user = await Users.findOne({name})
+            const order = await Orders.findOne({shortid: id})
+
+            if (user && order) {
+
+                order.isAccepted = !order.isAccepted
+                order.dateUp = dateUp
+
+                await Orders.updateOne({shortid: id}, {$set: order})
 
                 return 'Success'
             }
@@ -403,7 +422,8 @@ const resolvers = {
 
                 return 'Success'
             }
-        }
+        },
+       
         
        
        
